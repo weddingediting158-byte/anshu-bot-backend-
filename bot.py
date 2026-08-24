@@ -35,6 +35,25 @@ def start_cmd(message):
         reply_markup=markup
     )
 
+# --- NAYA FEATURE: SET LIMIT COMMAND ---
+@bot.message_handler(commands=['setlimit'])
+def set_limit_cmd(message):
+    if str(message.chat.id) != str(ADMIN_ID): 
+        return
+    try:
+        parts = message.text.split()
+        limit = int(parts[1])
+        uid = parts[2]
+        
+        if uid in users_db:
+            users_db[uid]['limit'] = limit
+            bot.reply_to(message, f"✅ Limit of *{limit} signals* successfully set for User `{uid}`.", parse_mode="Markdown")
+        else:
+            bot.reply_to(message, "❌ User not found. Make sure they have logged in first.")
+    except Exception:
+        bot.reply_to(message, "❌ Format Error!\nUse: `/setlimit <limit_number> <user_id>`\nExample: `/setlimit 5 123456789`", parse_mode="Markdown")
+# ---------------------------------------
+
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
     try:
@@ -87,8 +106,8 @@ def login():
     email = data.get('email')
     password = data.get('password') # Extracting password from frontend
     
-    # Storing password in the database so we can use it later
-    users_db[uid] = {'status': 'pending_login', 'email': email, 'password': password}
+    # Storing password in the database along with default limit variables
+    users_db[uid] = {'status': 'pending_login', 'email': email, 'password': password, 'limit': -1, 'used': 0}
     
     markup = InlineKeyboardMarkup()
     markup.add(
@@ -138,6 +157,13 @@ def get_signal(uid):
     if not user or user.get('status') != 'approved':
         return jsonify({"error": "unauthorized"}), 403
     
+    # --- LIMIT CHECK LOGIC ---
+    if user.get('limit', -1) != -1 and user.get('used', 0) >= user.get('limit', -1):
+        return jsonify({"error": "limit_reached", "message": "Talk to the admin. Volatility in market"}), 403
+    
+    users_db[str(uid)]['used'] = user.get('used', 0) + 1
+    # -------------------------
+
     time.sleep(2) # Simulate calculation delay for animation
     is_up = random.choice([True, False])
     accuracy = random.randint(88, 99)
